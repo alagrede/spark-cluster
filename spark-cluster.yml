@@ -1,0 +1,90 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    name: spark-master
+  name: spark-master
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: spark-master
+    spec:
+      containers:
+      - name : spark-master
+        image: alag/spark-master:2.3.1-hadoop2.7
+        imagePullPolicy: "Always"
+        name: spark-master
+        ports:
+        - containerPort: 7077
+          protocol: TCP
+        command:
+         - "/bin/bash"
+         - "-c"
+         - "--"
+        args :
+         - 'export SPARK_MASTER_PORT=7077 && /master.sh'
+      initContainers:
+      - name: block-metadata
+        image: minrk/tc-init:0.0.4
+        command: ["iptables","-A","OUTPUT","-p","tcp","-d","169.254.169.254","-j","DROP"]
+        securityContext:
+          runAsUser: 0
+          capabilities:
+            add: ["NET_ADMIN"]
+      
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-master
+  labels:
+    name: spark-master
+spec:
+  ports:
+    # the port that this service should serve on
+  - name: webui
+    port: 8080
+    targetPort: 8080
+  - name: spark
+    port: 7077
+    targetPort: 7077
+  selector:
+    name: spark-master
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    name: spark-worker
+  name: spark-worker
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        name: spark-worker
+    spec:
+      containers:
+      - image: alag/spark-worker:2.3.1-hadoop2.7
+        imagePullPolicy : "Always"
+        name: spark-worker
+        ports:
+        - containerPort: 7078
+          protocol: TCP
+        command:
+         - "/bin/bash"
+         - "-xc"
+         - "--"
+        args :
+         - 'export PYTHONPATH=/opt/conda/lib/python3.6 && export PYSPARK_PYTHON=/opt/conda/bin/python3.6 && export PYSPARK_DRIVER_PYTHON=python3.6.5 && export PYSPARK_PYTHONPATH_SET=1 && /worker.sh'
+      initContainers:
+      - name: block-metadata
+        image: minrk/tc-init:0.0.4
+        command: ["iptables","-A","OUTPUT","-p","tcp","-d","169.254.169.254","-j","DROP"]
+        securityContext:
+          runAsUser: 0
+          capabilities:
+            add: ["NET_ADMIN"]
+
